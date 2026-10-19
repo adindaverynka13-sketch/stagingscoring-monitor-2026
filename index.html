@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard Leader Score 2026</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1a1d23;--mute:#667085;--line:#e4e7ec;--bar:#2563eb;--ok:#16a34a}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1218;--card:#181c24;--text:#eef0f4;--mute:#98a2b3;--line:#2a303c;--bar:#60a5fa;--ok:#4ade80}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:28px 0 10px}
+.sub{color:var(--mute);margin:0 0 16px}
+.ctrl{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.ctrl label{font-size:13px;color:var(--mute);display:flex;flex-direction:column;gap:4px}
+select,input{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kpi,.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi b{display:block;font-size:28px;margin-top:2px}.kpi span{color:var(--mute);font-size:13px}
+.card{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}th{font-size:12px;color:var(--mute);font-weight:600}
+tr:last-child td{border-bottom:0}
+.bar{height:8px;background:var(--line);border-radius:4px;min-width:90px}.bar i{display:block;height:100%;border-radius:4px;background:var(--bar)}
+.bar.ok i{background:var(--ok)}
+.note{color:var(--mute);font-size:12px;margin-top:20px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Dashboard Leader Score 2026</h1>
+  <p class="sub">Ringkasan nilai (Score Total) per regional, nasional, dan kategori staging.</p>
+
+  <div class="ctrl">
+    <label>Kategori
+      <select id="fKat"><option value="">Semua</option></select>
+    </label>
+    <label>Batas lulus (%): nilai &gt; batas
+      <input id="thr" type="number" step="0.01" value="74.99" style="width:120px">
+    </label>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <h2>Per Regional</h2>
+  <div class="card"><table id="tReg"></table></div>
+
+  <h2>Per Kategori (Cluster / Reguler)</h2>
+  <div class="card"><table id="tKat"></table></div>
+
+  <p class="note" id="note"></p>
+</main>
+
+<script>
+const fmt = n => n.toLocaleString("id-ID",{minimumFractionDigits:2,maximumFractionDigits:2});
+let DATA = [];
+
+function stats(rows, thr){
+  const sc = rows.filter(r => r.score !== null).map(r => r.score);
+  const n = sc.length, pass = sc.filter(s => s > thr).length;
+  return {n, pass, avg: n ? sc.reduce((a,b)=>a+b,0)/n : 0,
+          pct: n ? pass/n*100 : 0, empty: rows.length - n};
+}
+
+function groupTable(el, rows, key, label, thr){
+  const groups = [...new Set(rows.map(r => r[key]))].sort();
+  let h = `<tr><th>${label}</th><th>Dinilai</th><th>Rata-rata</th><th></th><th>Lulus</th><th>% Lulus</th><th></th></tr>`;
+  for (const g of groups){
+    const s = stats(rows.filter(r => r[key] === g), thr);
+    h += `<tr><td>${g}</td><td>${s.n}</td><td>${fmt(s.avg)}%</td>
+      <td><div class="bar"><i style="width:${s.avg}%"></i></div></td>
+      <td>${s.pass}</td><td>${fmt(s.pct)}%</td>
+      <td><div class="bar ok"><i style="width:${s.pct}%"></i></div></td></tr>`;
+  }
+  el.innerHTML = h;
+}
+
+function render(){
+  const thr = parseFloat(document.getElementById("thr").value) || 0;
+  const kat = document.getElementById("fKat").value;
+  const rows = kat ? DATA.filter(r => r.kategori === kat) : DATA;
+  const s = stats(rows, thr);
+
+  document.getElementById("kpis").innerHTML = `
+    <div class="kpi"><span>Rata-rata nasional</span><b>${fmt(s.avg)}%</b></div>
+    <div class="kpi"><span>Lulus nasional (&gt; ${fmt(thr)}%)</span><b>${s.pass} <small style="font-size:15px;color:var(--mute)">/ ${s.n} (${fmt(s.pct)}%)</small></b></div>
+    <div class="kpi"><span>Leader sudah dinilai</span><b>${s.n}</b></div>
+    <div class="kpi"><span>Belum ada nilai</span><b>${s.empty}</b></div>`;
+
+  groupTable(document.getElementById("tReg"), rows, "region", "Regional", thr);
+  groupTable(document.getElementById("tKat"), DATA, "kategori", "Kategori", thr);
+  document.getElementById("note").textContent =
+    "Tabel kategori selalu menampilkan semua data. Leader tanpa nilai tidak dihitung dalam rata-rata maupun persentase lulus.";
+}
+
+fetch("data.json").then(r => r.json()).then(d => {
+  DATA = d;
+  const sel = document.getElementById("fKat");
+  [...new Set(d.map(r => r.kategori))].sort().forEach(k => sel.add(new Option(k, k)));
+  sel.onchange = render; document.getElementById("thr").oninput = render;
+  render();
+}).catch(() => document.getElementById("kpis").innerHTML = "<p>Gagal memuat data.json</p>");
+</script>
+</body>
+</html>
