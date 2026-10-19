@@ -24,6 +24,13 @@ tr:last-child td{border-bottom:0}
 .bar{height:8px;background:var(--line);border-radius:4px;min-width:90px}.bar i{display:block;height:100%;border-radius:4px;background:var(--bar)}
 .bar.ok i{background:var(--ok)}
 .note{color:var(--mute);font-size:12px;margin-top:20px}
+.cmp{display:grid;grid-template-columns:minmax(120px,230px) 1fr;gap:6px 12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.cmp:last-child{border-bottom:0}.cmp .nm{font-weight:600;font-size:13px}
+.row{display:grid;grid-template-columns:110px 1fr 44px;gap:8px;align-items:center;font-size:12px;color:var(--mute)}
+.row b{color:var(--text);text-align:right;font-weight:600}
+.c1 i{background:#2563eb}.c2 i{background:#f59e0b}.c3 i{background:#8b5cf6}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mute);margin-bottom:6px}
+.legend span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;background:var(--c)}
 </style>
 </head>
 <body>
@@ -48,12 +55,18 @@ tr:last-child td{border-bottom:0}
   <h2>Per Kategori (Cluster / Reguler)</h2>
   <div class="card"><table id="tKat"></table></div>
 
+  <h2>Rata-rata per Komponen Skor (skala 0-10)</h2>
+  <div class="card" id="comp"></div>
+
+  <h2>Rata-rata per Komponen Skor (skala 0-10)</h2>
+  <div class="card" id="comp"></div>
+
   <p class="note" id="note"></p>
 </main>
 
+<script src="data.js"></script>
 <script>
 const fmt = n => n.toLocaleString("id-ID",{minimumFractionDigits:2,maximumFractionDigits:2});
-let DATA = [];
 
 function stats(rows, thr){
   const sc = rows.filter(r => r.score !== null).map(r => r.score);
@@ -75,6 +88,22 @@ function groupTable(el, rows, key, label, thr){
   el.innerHTML = h;
 }
 
+
+function avgOf(rows,k){const v=rows.map(r=>r[k]).filter(x=>x!==null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0}
+function compChart(el, rows){
+  const comps=[["fm","First Mile","c1"],["lm","Last Mile","c2"],["ph","Product Handling","c3"]];
+  const groups=["Nasional",...[...new Set(rows.map(r=>r.region))].sort()];
+  let h=`<div class="legend"><span style="--c:#2563eb">First Mile</span><span style="--c:#f59e0b">Last Mile</span><span style="--c:#8b5cf6">Product Handling</span></div>`;
+  for(const g of groups){
+    const sub=g==="Nasional"?rows:rows.filter(r=>r.region===g);
+    h+=`<div class="cmp"><div class="nm">${g}</div><div>`;
+    for(const [k,l,c] of comps){const a=avgOf(sub,k);
+      h+=`<div class="row"><span>${l}</span><div class="bar ${c}"><i style="width:${a*10}%"></i></div><b>${fmt(a)}</b></div>`}
+    h+=`</div></div>`;
+  }
+  el.innerHTML=h;
+}
+
 function render(){
   const thr = parseFloat(document.getElementById("thr").value) || 0;
   const kat = document.getElementById("fKat").value;
@@ -88,18 +117,16 @@ function render(){
     <div class="kpi"><span>Belum ada nilai</span><b>${s.empty}</b></div>`;
 
   groupTable(document.getElementById("tReg"), rows, "region", "Regional", thr);
+  compChart(document.getElementById("comp"), rows);
   groupTable(document.getElementById("tKat"), DATA, "kategori", "Kategori", thr);
   document.getElementById("note").textContent =
     "Tabel kategori selalu menampilkan semua data. Leader tanpa nilai tidak dihitung dalam rata-rata maupun persentase lulus.";
 }
 
-fetch("data.json").then(r => r.json()).then(d => {
-  DATA = d;
-  const sel = document.getElementById("fKat");
-  [...new Set(d.map(r => r.kategori))].sort().forEach(k => sel.add(new Option(k, k)));
-  sel.onchange = render; document.getElementById("thr").oninput = render;
-  render();
-}).catch(() => document.getElementById("kpis").innerHTML = "<p>Gagal memuat data.json</p>");
+const sel = document.getElementById("fKat");
+[...new Set(DATA.map(r => r.kategori))].sort().forEach(k => sel.add(new Option(k, k)));
+sel.onchange = render; document.getElementById("thr").oninput = render;
+render();
 </script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-"""Ubah file Excel menjadi data.json (tanpa nama/email/NIP) untuk dashboard.
+"""Ubah file Excel menjadi data.js (tanpa nama/email/NIP) untuk dashboard.
 Pemakaian:  python convert.py "Data_Leader_Score_2026.xlsx"
 Butuh: pip install pandas openpyxl
 Catatan: nilai kolom 'Score Total' dibaca dari hasil hitung Excel, jadi file
@@ -17,8 +17,11 @@ for _, r in df.iterrows():
         "region": region,
         "kategori": str(r["Kategori Staging"]).strip().title(),
         "score": None if pd.isna(s) else round(float(s) * 100, 2),
+        "fm": None if pd.isna(r["First Mile Score"]) else float(r["First Mile Score"]),
+        "lm": None if pd.isna(r["Last Mile Score"]) else float(r["Last Mile Score"]),
+        "ph": None if pd.isna(r["Product Handling Score"]) else float(r["Product Handling Score"]),
     })
 
-with open("data.json", "w", encoding="utf-8") as f:
-    json.dump(rows, f, ensure_ascii=False)
-print(f"OK: {len(rows)} baris -> data.json")
+with open("data.js", "w", encoding="utf-8") as f:
+    f.write("const DATA = " + json.dumps(rows, ensure_ascii=False) + ";")
+print(f"OK: {len(rows)} baris -> data.js")
