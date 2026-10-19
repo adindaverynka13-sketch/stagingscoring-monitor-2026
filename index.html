@@ -29,13 +29,17 @@ td.go{color:var(--mute);width:24px;padding-left:0}
 a.back{color:var(--bar);text-decoration:none;font-size:14px}
 .row{display:grid;grid-template-columns:150px 1fr 150px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}.row b{text-align:right}.row small{color:var(--mute);display:block;text-align:right;font-size:12px}
+.hist{display:flex;gap:8px;height:190px;align-items:stretch;min-width:420px}
+.hc{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;font-size:12px}
+.hc i{display:block;width:100%;background:var(--bar);border-radius:4px 4px 0 0;min-height:2px}.hc i.ok{background:var(--ok)}
+.hc b{margin-bottom:3px}.hc span{color:var(--mute);margin-top:5px;white-space:nowrap}
 .hint,.note{color:var(--mute);font-size:12px;margin-top:8px}
 </style>
 </head>
 <body>
 <main id="app">
   <h1>Dashboard Leader Score 2026</h1>
-  <p class="sub">Ringkasan nilai (Score Total). Klik salah satu regional untuk melihat detailnya.</p>
+  <p class="sub">Ringkasan nilai (Score Total) dan IPK. Pilih kategori di filter, klik regional untuk melihat detailnya.</p>
 
   <div class="ctrl">
     <label>Kategori
@@ -51,8 +55,10 @@ a.back{color:var(--bar);text-decoration:none;font-size:14px}
     <h2>Per Regional</h2>
     <div class="card"><table id="tReg"></table></div>
     <p class="hint">Klik baris regional untuk melihat detail.</p>
-    <h2>Per Kategori (Cluster / Reguler)</h2>
-    <div class="card"><table id="tKat"></table></div>
+    <h2>Persebaran Nilai (Score Total)</h2>
+    <div class="card"><div class="hist" id="hScore"></div><p class="hint">Jumlah leader per rentang nilai (%). Hijau = rentang yang lulus.</p></div>
+    <h2>Persebaran IPK Total (skala 1-4)</h2>
+    <div class="card"><div class="hist" id="hIpk"></div><p class="hint">Jumlah leader per rentang IPK Total.</p></div>
   </div>
 
   <div id="detail" style="display:none"></div>
@@ -92,10 +98,21 @@ function groupTable(rows, key, label, thr, clickable){
   return h;
 }
 
+function hist(el, vals, edges, labels, thr){
+  const v = vals.filter(x => x !== null);
+  const cnt = labels.map((_, i) => v.filter(x => x >= edges[i] && x < edges[i+1]).length);
+  const max = Math.max(...cnt, 1);
+  el.innerHTML = labels.map((l, i) => `<div class="hc"><b>${cnt[i]}</b>
+    <i class="${thr !== null && edges[i] > thr ? "ok" : ""}" style="height:${cnt[i]/max*130}px"></i><span>${l}</span></div>`).join("");
+}
+
 function home(rows, thr, kat){
   $("kpis").innerHTML = kpis(stats(rows, thr), "nasional" + (kat ? ` (${kat})` : ""), thr);
   $("tReg").innerHTML = groupTable(rows, "region", "Regional", thr, true);
-  $("tKat").innerHTML = groupTable(DATA, "kategori", "Kategori", thr, false);
+  hist($("hScore"), rows.map(r => r.score), [0,60,70,75,80,85,90,95,100,101],
+    ["&lt;60","60-69","70-74","75-79","80-84","85-89","90-94","95-99","100"], thr);
+  hist($("hIpk"), rows.map(r => r.ipk), [0,2,2.5,3,3.5,4,4.01],
+    ["&lt;2,0","2,0-2,49","2,5-2,99","3,0-3,49","3,5-3,99","4,0"], null);
 }
 
 function detail(reg, rows, thr, kat){
@@ -110,7 +127,7 @@ function detail(reg, rows, thr, kat){
     h += `<div class="row"><span>${l}</span><div class="bar"><i style="width:${a*10}%"></i></div>
       <div><b>${fmt(a)}</b><small>Nasional ${fmt(nat)}</small></div></div>`;
   }
-  h += `</div><h2>Per Kategori di Regional Ini</h2><div class="card"><table>${groupTable(DATA.filter(r => r.region === reg), "kategori", "Kategori", thr, false)}</table></div>`;
+  h += `</div>`;
   $("detail").innerHTML = h;
 }
 
