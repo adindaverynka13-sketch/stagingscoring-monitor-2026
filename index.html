@@ -17,26 +17,25 @@ select,input{font:inherit;padding:6px 10px;border:1px solid var(--line);border-r
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .kpi,.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .kpi b{display:block;font-size:28px;margin-top:2px}.kpi span{color:var(--mute);font-size:13px}
+.kpi small{font-size:15px;color:var(--mute);font-weight:400}
 .card{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:560px}
 th,td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line)}
 th:first-child,td:first-child{text-align:left}th{font-size:12px;color:var(--mute);font-weight:600}
 tr:last-child td{border-bottom:0}
+tr[data-r]{cursor:pointer}tr[data-r]:hover{background:var(--bg)}
+td.go{color:var(--mute);width:24px;padding-left:0}
 .bar{height:8px;background:var(--line);border-radius:4px;min-width:90px}.bar i{display:block;height:100%;border-radius:4px;background:var(--bar)}
 .bar.ok i{background:var(--ok)}
-.note{color:var(--mute);font-size:12px;margin-top:20px}
-.cmp{display:grid;grid-template-columns:minmax(120px,230px) 1fr;gap:6px 12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
-.cmp:last-child{border-bottom:0}.cmp .nm{font-weight:600;font-size:13px}
-.row{display:grid;grid-template-columns:110px 1fr 44px;gap:8px;align-items:center;font-size:12px;color:var(--mute)}
-.row b{color:var(--text);text-align:right;font-weight:600}
-.c1 i{background:#2563eb}.c2 i{background:#f59e0b}.c3 i{background:#8b5cf6}
-.legend{display:flex;gap:14px;font-size:12px;color:var(--mute);margin-bottom:6px}
-.legend span:before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;background:var(--c)}
+a.back{color:var(--bar);text-decoration:none;font-size:14px}
+.row{display:grid;grid-template-columns:150px 1fr 150px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}.row b{text-align:right}.row small{color:var(--mute);display:block;text-align:right;font-size:12px}
+.hint,.note{color:var(--mute);font-size:12px;margin-top:8px}
 </style>
 </head>
 <body>
-<main>
+<main id="app">
   <h1>Dashboard Leader Score 2026</h1>
-  <p class="sub">Ringkasan nilai (Score Total) per regional, nasional, dan kategori staging.</p>
+  <p class="sub">Ringkasan nilai (Score Total). Klik salah satu regional untuk melihat detailnya.</p>
 
   <div class="ctrl">
     <label>Kategori
@@ -47,85 +46,89 @@ tr:last-child td{border-bottom:0}
     </label>
   </div>
 
-  <div class="kpis" id="kpis"></div>
+  <div id="home">
+    <div class="kpis" id="kpis"></div>
+    <h2>Per Regional</h2>
+    <div class="card"><table id="tReg"></table></div>
+    <p class="hint">Klik baris regional untuk melihat detail.</p>
+    <h2>Per Kategori (Cluster / Reguler)</h2>
+    <div class="card"><table id="tKat"></table></div>
+  </div>
 
-  <h2>Per Regional</h2>
-  <div class="card"><table id="tReg"></table></div>
-
-  <h2>Per Kategori (Cluster / Reguler)</h2>
-  <div class="card"><table id="tKat"></table></div>
-
-  <h2>Rata-rata per Komponen Skor (skala 0-10)</h2>
-  <div class="card" id="comp"></div>
-
-  <h2>Rata-rata per Komponen Skor (skala 0-10)</h2>
-  <div class="card" id="comp"></div>
-
-  <p class="note" id="note"></p>
+  <div id="detail" style="display:none"></div>
+  <p class="note">Leader yang belum punya nilai tidak dihitung dalam rata-rata maupun persentase lulus.</p>
 </main>
 
 <script src="data.js"></script>
 <script>
+const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString("id-ID",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
 
 function stats(rows, thr){
   const sc = rows.filter(r => r.score !== null).map(r => r.score);
   const n = sc.length, pass = sc.filter(s => s > thr).length;
-  return {n, pass, avg: n ? sc.reduce((a,b)=>a+b,0)/n : 0,
-          pct: n ? pass/n*100 : 0, empty: rows.length - n};
+  return {n, pass, avg: n ? sc.reduce((a,b)=>a+b,0)/n : 0, pct: n ? pass/n*100 : 0, empty: rows.length - n};
+}
+function avgOf(rows,k){const v=rows.map(r=>r[k]).filter(x=>x!==null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0}
+
+function kpis(s, scope, thr){
+  return `<div class="kpi"><span>Rata-rata ${scope}</span><b>${fmt(s.avg)}%</b></div>
+    <div class="kpi"><span>Lulus ${scope} (&gt; ${fmt(thr)}%)</span><b>${s.pass} <small>/ ${s.n} (${fmt(s.pct)}%)</small></b></div>
+    <div class="kpi"><span>Leader sudah dinilai</span><b>${s.n}</b></div>
+    <div class="kpi"><span>Belum ada nilai</span><b>${s.empty}</b></div>`;
 }
 
-function groupTable(el, rows, key, label, thr){
+function groupTable(rows, key, label, thr, clickable){
   const groups = [...new Set(rows.map(r => r[key]))].sort();
-  let h = `<tr><th>${label}</th><th>Dinilai</th><th>Rata-rata</th><th></th><th>Lulus</th><th>% Lulus</th><th></th></tr>`;
+  let h = `<tr><th>${label}</th><th>Dinilai</th><th>Rata-rata</th><th></th><th>Lulus</th><th>% Lulus</th><th></th>${clickable?"<th></th>":""}</tr>`;
   for (const g of groups){
     const s = stats(rows.filter(r => r[key] === g), thr);
-    h += `<tr><td>${g}</td><td>${s.n}</td><td>${fmt(s.avg)}%</td>
+    h += `<tr${clickable?` data-r="${esc(g)}"`:""}><td>${esc(g)}</td><td>${s.n}</td><td>${fmt(s.avg)}%</td>
       <td><div class="bar"><i style="width:${s.avg}%"></i></div></td>
       <td>${s.pass}</td><td>${fmt(s.pct)}%</td>
-      <td><div class="bar ok"><i style="width:${s.pct}%"></i></div></td></tr>`;
+      <td><div class="bar ok"><i style="width:${s.pct}%"></i></div></td>${clickable?'<td class="go">›</td>':""}</tr>`;
   }
-  el.innerHTML = h;
+  return h;
 }
 
+function home(rows, thr, kat){
+  $("kpis").innerHTML = kpis(stats(rows, thr), "nasional" + (kat ? ` (${kat})` : ""), thr);
+  $("tReg").innerHTML = groupTable(rows, "region", "Regional", thr, true);
+  $("tKat").innerHTML = groupTable(DATA, "kategori", "Kategori", thr, false);
+}
 
-function avgOf(rows,k){const v=rows.map(r=>r[k]).filter(x=>x!==null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0}
-function compChart(el, rows){
-  const comps=[["fm","First Mile","c1"],["lm","Last Mile","c2"],["ph","Product Handling","c3"]];
-  const groups=["Nasional",...[...new Set(rows.map(r=>r.region))].sort()];
-  let h=`<div class="legend"><span style="--c:#2563eb">First Mile</span><span style="--c:#f59e0b">Last Mile</span><span style="--c:#8b5cf6">Product Handling</span></div>`;
-  for(const g of groups){
-    const sub=g==="Nasional"?rows:rows.filter(r=>r.region===g);
-    h+=`<div class="cmp"><div class="nm">${g}</div><div>`;
-    for(const [k,l,c] of comps){const a=avgOf(sub,k);
-      h+=`<div class="row"><span>${l}</span><div class="bar ${c}"><i style="width:${a*10}%"></i></div><b>${fmt(a)}</b></div>`}
-    h+=`</div></div>`;
+function detail(reg, rows, thr, kat){
+  const mine = rows.filter(r => r.region === reg);
+  const scope = kat ? ` (${kat})` : "";
+  const comps = [["fm","First Mile"],["lm","Last Mile"],["ph","Product Handling"]];
+  let h = `<a class="back" href="#">‹ Kembali ke ringkasan</a><h2 style="font-size:20px;margin-top:10px">${esc(reg)}${scope}</h2>
+    <div class="kpis">${kpis(stats(mine, thr), "regional", thr)}</div>
+    <h2>Rata-rata per Komponen Skor (skala 0-10)</h2><div class="card">`;
+  for (const [k,l] of comps){
+    const a = avgOf(mine,k), nat = avgOf(rows,k);
+    h += `<div class="row"><span>${l}</span><div class="bar"><i style="width:${a*10}%"></i></div>
+      <div><b>${fmt(a)}</b><small>Nasional ${fmt(nat)}</small></div></div>`;
   }
-  el.innerHTML=h;
+  h += `</div><h2>Per Kategori di Regional Ini</h2><div class="card"><table>${groupTable(DATA.filter(r => r.region === reg), "kategori", "Kategori", thr, false)}</table></div>`;
+  $("detail").innerHTML = h;
 }
 
 function render(){
-  const thr = parseFloat(document.getElementById("thr").value) || 0;
-  const kat = document.getElementById("fKat").value;
+  const thr = parseFloat($("thr").value) || 0, kat = $("fKat").value;
   const rows = kat ? DATA.filter(r => r.kategori === kat) : DATA;
-  const s = stats(rows, thr);
-
-  document.getElementById("kpis").innerHTML = `
-    <div class="kpi"><span>Rata-rata nasional</span><b>${fmt(s.avg)}%</b></div>
-    <div class="kpi"><span>Lulus nasional (&gt; ${fmt(thr)}%)</span><b>${s.pass} <small style="font-size:15px;color:var(--mute)">/ ${s.n} (${fmt(s.pct)}%)</small></b></div>
-    <div class="kpi"><span>Leader sudah dinilai</span><b>${s.n}</b></div>
-    <div class="kpi"><span>Belum ada nilai</span><b>${s.empty}</b></div>`;
-
-  groupTable(document.getElementById("tReg"), rows, "region", "Regional", thr);
-  compChart(document.getElementById("comp"), rows);
-  groupTable(document.getElementById("tKat"), DATA, "kategori", "Kategori", thr);
-  document.getElementById("note").textContent =
-    "Tabel kategori selalu menampilkan semua data. Leader tanpa nilai tidak dihitung dalam rata-rata maupun persentase lulus.";
+  const m = (location.hash || "").match(/^#r=(.+)$/);
+  const reg = m ? decodeURIComponent(m[1]) : "";
+  const isDetail = reg && DATA.some(r => r.region === reg);
+  $("home").style.display = isDetail ? "none" : "";
+  $("detail").style.display = isDetail ? "" : "none";
+  isDetail ? detail(reg, rows, thr, kat) : home(rows, thr, kat);
 }
 
-const sel = document.getElementById("fKat");
-[...new Set(DATA.map(r => r.kategori))].sort().forEach(k => sel.add(new Option(k, k)));
-sel.onchange = render; document.getElementById("thr").oninput = render;
+[...new Set(DATA.map(r => r.kategori))].sort().forEach(k => $("fKat").add(new Option(k, k)));
+$("fKat").onchange = render; $("thr").oninput = render;
+$("app").onclick = e => { const tr = e.target.closest("tr[data-r]"); if (tr) location.hash = "r=" + encodeURIComponent(tr.dataset.r); };
+window.onhashchange = () => { render(); window.scrollTo(0,0); };
 render();
 </script>
 </body>
