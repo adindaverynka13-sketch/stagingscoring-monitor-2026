@@ -29,10 +29,8 @@ td.go{color:var(--mute);width:24px;padding-left:0}
 a.back{color:var(--bar);text-decoration:none;font-size:14px}
 .row{display:grid;grid-template-columns:150px 1fr 150px;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}.row b{text-align:right}.row small{color:var(--mute);display:block;text-align:right;font-size:12px}
-.hist{display:flex;gap:8px;height:190px;align-items:stretch;min-width:420px}
-.hc{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;font-size:12px}
-.hc i{display:block;width:100%;background:var(--bar);border-radius:4px 4px 0 0;min-height:2px}.hc i.ok{background:var(--ok)}
-.hc b{margin-bottom:3px}.hc span{color:var(--mute);margin-top:5px;white-space:nowrap}
+.line{width:100%;min-width:460px;height:auto;display:block}.line text{fill:var(--mute);font-size:11px;font-family:inherit}.line text.v{fill:var(--text);font-weight:600}
+.line .ax{stroke:var(--line)}.line .ln{fill:none;stroke:var(--bar);stroke-width:2.5}.line .ar{fill:var(--bar);opacity:.1}.line circle{fill:var(--bar);stroke:var(--card);stroke-width:2}.line circle.ok{fill:var(--ok)}
 .hint,.note{color:var(--mute);font-size:12px;margin-top:8px}
 </style>
 </head>
@@ -56,9 +54,9 @@ a.back{color:var(--bar);text-decoration:none;font-size:14px}
     <div class="card"><table id="tReg"></table></div>
     <p class="hint">Klik baris regional untuk melihat detail.</p>
     <h2>Persebaran Nilai (Score Total)</h2>
-    <div class="card"><div class="hist" id="hScore"></div><p class="hint">Jumlah leader per rentang nilai (%). Hijau = rentang yang lulus.</p></div>
+    <div class="card"><div id="hScore"></div><p class="hint">Jumlah leader per rentang nilai (%). Titik hijau = rentang yang lulus.</p></div>
     <h2>Persebaran IPK Total (skala 1-4)</h2>
-    <div class="card"><div class="hist" id="hIpk"></div><p class="hint">Jumlah leader per rentang IPK Total.</p></div>
+    <div class="card"><div id="hIpk"></div><p class="hint">Jumlah leader per rentang IPK Total.</p></div>
   </div>
 
   <div id="detail" style="display:none"></div>
@@ -98,21 +96,35 @@ function groupTable(rows, key, label, thr, clickable){
   return h;
 }
 
-function hist(el, vals, edges, labels, thr){
-  const v = vals.filter(x => x !== null);
+const SC_E=[0,60,70,75,80,85,90,95,100,101], SC_L=["&lt;60","60-69","70-74","75-79","80-84","85-89","90-94","95-99","100"];
+const IP_E=[0,2,2.5,3,3.5,4,4.01], IP_L=["&lt;2,0","2,0-2,49","2,5-2,99","3,0-3,49","3,5-3,99","4,0"];
+
+function lineChart(el, vals, edges, labels, thr){
+  const v = vals.filter(x => x != null);
   const cnt = labels.map((_, i) => v.filter(x => x >= edges[i] && x < edges[i+1]).length);
-  const max = Math.max(...cnt, 1);
-  el.innerHTML = labels.map((l, i) => `<div class="hc"><b>${cnt[i]}</b>
-    <i class="${thr !== null && edges[i] > thr ? "ok" : ""}" style="height:${cnt[i]/max*130}px"></i><span>${l}</span></div>`).join("");
+  const W = 640, H = 230, L = 20, R = 20, T = 30, B = 40, max = Math.max(...cnt, 1);
+  const X = i => L + (W-L-R) * (labels.length > 1 ? i/(labels.length-1) : .5);
+  const Y = c => T + (H-T-B) * (1 - c/max);
+  const pts = cnt.map((c,i) => `${X(i).toFixed(1)},${Y(c).toFixed(1)}`).join(" ");
+  const base = H - B;
+  el.innerHTML = v.length ? `<svg class="line" viewBox="0 0 ${W} ${H}" role="img">
+    <line class="ax" x1="${L}" x2="${W-R}" y1="${base}" y2="${base}"/>
+    <polygon class="ar" points="${X(0)},${base} ${pts} ${X(labels.length-1)},${base}"/>
+    <polyline class="ln" points="${pts}"/>` +
+    cnt.map((c,i) => `<circle class="${thr != null && edges[i] > thr ? "ok" : ""}" cx="${X(i)}" cy="${Y(c)}" r="5"/>
+      <text class="v" x="${X(i)}" y="${Y(c)-10}" text-anchor="middle">${c}</text>
+      <text x="${X(i)}" y="${H-14}" text-anchor="middle">${labels[i]}</text>`).join("") + `</svg>`
+    : "<p class='hint'>Belum ada data untuk ditampilkan.</p>";
+}
+function charts(a, b, rows, thr){
+  lineChart($(a), rows.map(r => r.score), SC_E, SC_L, thr);
+  lineChart($(b), rows.map(r => r.ipk), IP_E, IP_L, null);
 }
 
 function home(rows, thr, kat){
   $("kpis").innerHTML = kpis(stats(rows, thr), "nasional" + (kat ? ` (${kat})` : ""), thr);
   $("tReg").innerHTML = groupTable(rows, "region", "Regional", thr, true);
-  hist($("hScore"), rows.map(r => r.score), [0,60,70,75,80,85,90,95,100,101],
-    ["&lt;60","60-69","70-74","75-79","80-84","85-89","90-94","95-99","100"], thr);
-  hist($("hIpk"), rows.map(r => r.ipk), [0,2,2.5,3,3.5,4,4.01],
-    ["&lt;2,0","2,0-2,49","2,5-2,99","3,0-3,49","3,5-3,99","4,0"], null);
+  charts("hScore", "hIpk", rows, thr);
 }
 
 function detail(reg, rows, thr, kat){
@@ -127,8 +139,10 @@ function detail(reg, rows, thr, kat){
     h += `<div class="row"><span>${l}</span><div class="bar"><i style="width:${a*10}%"></i></div>
       <div><b>${fmt(a)}</b><small>Nasional ${fmt(nat)}</small></div></div>`;
   }
-  h += `</div>`;
+  h += `</div><h2>Persebaran Nilai (Score Total)</h2><div class="card"><div id="dScore"></div></div>
+    <h2>Persebaran IPK Total (skala 1-4)</h2><div class="card"><div id="dIpk"></div></div>`;
   $("detail").innerHTML = h;
+  charts("dScore", "dIpk", mine, thr);
 }
 
 function render(){
