@@ -33,6 +33,7 @@ a.back{color:var(--bar);text-decoration:none;font-size:14px}
 .row:last-child{border-bottom:0}.row b{text-align:right}.row small{color:var(--mute);display:block;text-align:right;font-size:12px}
 .line{width:100%;min-width:460px;height:auto;display:block}.line text{fill:var(--mute);font-size:11px;font-family:inherit}.line text.v{fill:var(--text);font-weight:600}
 .line .ax{stroke:var(--line)}.line .ln{fill:none;stroke:var(--bar);stroke-width:2.5}.line .ar{fill:var(--bar);opacity:.1}.line circle{fill:var(--bar);stroke:var(--card);stroke-width:2}.line circle.ok{fill:var(--ok)}
+td.asp{text-align:left;min-width:120px}td.asp b{display:block;font-weight:600}td.asp .bar{margin-top:4px}tr.nat td{font-weight:600;background:var(--bg)}
 .hint,.note{color:var(--mute);font-size:12px;margin-top:8px}
 </style>
 </head>
@@ -55,6 +56,9 @@ a.back{color:var(--bar);text-decoration:none;font-size:14px}
     <h2>Per Regional</h2>
     <div class="card"><table id="tReg"></table></div>
     <p class="hint">Klik baris regional untuk melihat detail.</p>
+    <h2>Breakdown per Aspek (skala 0-10)</h2>
+    <div class="card"><table id="tAsp"></table></div>
+    <p class="hint">Rata-rata nilai tiap aspek per regional. Kolom "Terendah" menunjukkan aspek dengan nilai paling rendah di regional itu.</p>
     <h2>Persebaran Nilai (Score Total)</h2>
     <div class="card"><div id="hScore"></div><p class="hint">Jumlah leader per rentang nilai (%). Titik hijau = rentang yang lulus.</p></div>
     <h2>Persebaran IPK Total (skala 1-4)</h2>
@@ -124,9 +128,25 @@ function charts(a, b, rows, thr){
   lineChart($(b), rows.map(r => r.ipk), IP_E, IP_L, null);
 }
 
+const ASP = [["fm","First Mile"],["lm","Last Mile"],["ph","Product Handling"]];
+function aspectTable(rows){
+  const regs = [...new Set(rows.map(r => r.region))].sort();
+  let h = `<tr><th>Regional</th>${ASP.map(a => `<th style="text-align:left">${a[1]}</th>`).join("")}<th>Terendah</th><th></th></tr>`;
+  for (const g of ["Nasional", ...regs]){
+    const sub = g === "Nasional" ? rows : rows.filter(r => r.region === g);
+    const v = ASP.map(([k,l]) => ({l, a: avgOf(sub, k)}));
+    const low = v.reduce((m, x) => x.a < m.a ? x : m, v[0]);
+    h += `<tr class="${g==="Nasional"?"nat":""}"${g==="Nasional"?"":` data-r="${esc(g)}"`}><td>${esc(g)}</td>` +
+      v.map(x => `<td class="asp"><b>${fmt(x.a)}</b><div class="bar"><i style="width:${x.a*10}%"></i></div></td>`).join("") +
+      `<td>${low.l}</td>${g==="Nasional"?"<td></td>":'<td class="go">›</td>'}</tr>`;
+  }
+  return h;
+}
+
 function home(rows, thr, kat){
   $("kpis").innerHTML = kpis(stats(rows, thr), "nasional" + (kat ? ` (${kat})` : ""), thr);
   $("tReg").innerHTML = groupTable(rows, "region", "Regional", thr, true);
+  $("tAsp").innerHTML = aspectTable(rows);
   charts("hScore", "hIpk", rows, thr);
 }
 
