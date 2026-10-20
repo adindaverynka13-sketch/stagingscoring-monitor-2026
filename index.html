@@ -34,6 +34,8 @@ a.back{color:var(--bar);text-decoration:none;font-size:14px}
 .line{width:100%;min-width:460px;height:auto;display:block}.line text{fill:var(--mute);font-size:11px;font-family:inherit}.line text.v{fill:var(--text);font-weight:600}
 .line .ax{stroke:var(--line)}.line .ln{fill:none;stroke:var(--bar);stroke-width:2.5}.line .ar{fill:var(--bar);opacity:.1}.line circle{fill:var(--bar);stroke:var(--card);stroke-width:2}.line circle.ok{fill:var(--ok)}
 td.asp{text-align:left;min-width:120px}td.asp b{display:block;font-weight:600}td.asp .bar{margin-top:4px}tr.nat td{font-weight:600;background:var(--bg)}
+.kpis3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:640px){.kpis3{grid-template-columns:1fr}}
 .hint,.note{color:var(--mute);font-size:12px;margin-top:8px}
 </style>
 </head>
@@ -57,7 +59,7 @@ td.asp{text-align:left;min-width:120px}td.asp b{display:block;font-weight:600}td
     <div class="card"><table id="tReg"></table></div>
     <p class="hint">Klik baris regional untuk melihat detail.</p>
     <h2>Breakdown per Aspek Nasional (skala 0-10)</h2>
-    <div class="card" id="tAsp"></div>
+    <div class="kpis3" id="tAsp"></div>
     <p class="hint">Breakdown per aspek untuk tiap regional ada di halaman masing-masing regional (klik baris regional di atas).</p>
     <h2>Persebaran Nilai (Score Total)</h2>
     <div class="card"><div id="hScore"></div><p class="hint">Jumlah leader per rentang nilai (%). Titik hijau = rentang yang lulus.</p></div>
@@ -92,11 +94,10 @@ function kpis(s, scope, thr){
 
 function groupTable(rows, key, label, thr, clickable){
   const groups = [...new Set(rows.map(r => r[key]))].sort();
-  let h = `<tr><th>${label}</th><th>Dinilai</th><th>Rata-rata</th><th></th><th>Lulus</th><th>% Lulus</th><th></th>${clickable?"<th></th>":""}</tr>`;
+  let h = `<tr><th>${label}</th><th>Dinilai</th><th>Rata-rata</th><th>Lulus</th><th>% Lulus</th><th></th>${clickable?"<th></th>":""}</tr>`;
   for (const g of groups){
     const s = stats(rows.filter(r => r[key] === g), thr);
     h += `<tr${clickable?` data-r="${esc(g)}"`:""}><td>${esc(g)}</td><td>${s.n}</td><td>${fmt(s.avg)}%</td>
-      <td><div class="bar"><i style="width:${s.avg}%"></i></div></td>
       <td>${s.pass}</td><td>${fmt(s.pct)}%</td>
       <td><div class="bar ok"><i style="width:${s.pct}%"></i></div></td>${clickable?'<td class="go">›</td>':""}</tr>`;
   }
@@ -132,8 +133,7 @@ const ASP = [["fm","First Mile"],["lm","Last Mile"],["ph","Product Handling"]];
 function aspectNational(rows){
   const v = ASP.map(([k,l]) => ({l, a: avgOf(rows, k)}));
   const low = v.reduce((m, x) => x.a < m.a ? x : m, v[0]);
-  return v.map(x => `<div class="row"><b>${x.l}</b><div class="bar"><i style="width:${x.a*10}%"></i></div>
-    <div><b>${fmt(x.a)}</b><small>${x === low ? "Aspek terendah" : "&nbsp;"}</small></div></div>`).join("");
+  return v.map(x => `<div class="kpi"><span>${x.l}</span><b>${fmt(x.a)}</b>${x === low ? "<small>Aspek terendah</small>" : ""}</div>`).join("");
 }
 
 function home(rows, thr, kat){
@@ -149,12 +149,11 @@ function detail(reg, rows, thr, kat){
   const comps = [["fm","First Mile"],["lm","Last Mile"],["ph","Product Handling"]];
   let h = `<a class="back" href="#">‹ Kembali ke ringkasan</a><h2 style="font-size:20px;margin-top:10px">${esc(reg)}${scope}</h2>
     <div class="kpis">${kpis(stats(mine, thr), "regional", thr)}</div>
-    <h2>Breakdown per Aspek (skala 0-10)</h2><div class="card">`;
+    <h2>Breakdown per Aspek (skala 0-10)</h2><div class="kpis3">`;
   const lowK = comps.reduce((m, c) => avgOf(mine, c[0]) < avgOf(mine, m[0]) ? c : m, comps[0])[0];
   for (const [k,l] of comps){
     const a = avgOf(mine,k), nat = avgOf(rows,k);
-    h += `<div class="row"><span>${l}</span><div class="bar"><i style="width:${a*10}%"></i></div>
-      <div><b>${fmt(a)}</b><small>Nasional ${fmt(nat)}${k === lowK ? " · aspek terendah" : ""}</small></div></div>`;
+    h += `<div class="kpi"><span>${l}</span><b>${fmt(a)}</b><small>Nasional ${fmt(nat)}${k === lowK ? " · aspek terendah" : ""}</small></div>`;
   }
   h += `</div><h2>Persebaran Nilai (Score Total)</h2><div class="card"><div id="dScore"></div></div>
     <h2>Persebaran IPK Total (skala 1-4)</h2><div class="card"><div id="dIpk"></div></div>`;
