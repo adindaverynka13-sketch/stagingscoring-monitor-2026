@@ -56,9 +56,9 @@ td.asp{text-align:left;min-width:120px}td.asp b{display:block;font-weight:600}td
     <h2>Per Regional</h2>
     <div class="card"><table id="tReg"></table></div>
     <p class="hint">Klik baris regional untuk melihat detail.</p>
-    <h2>Breakdown per Aspek (skala 0-10)</h2>
-    <div class="card"><table id="tAsp"></table></div>
-    <p class="hint">Rata-rata nilai tiap aspek per regional. Kolom "Terendah" menunjukkan aspek dengan nilai paling rendah di regional itu.</p>
+    <h2>Breakdown per Aspek Nasional (skala 0-10)</h2>
+    <div class="card" id="tAsp"></div>
+    <p class="hint">Breakdown per aspek untuk tiap regional ada di halaman masing-masing regional (klik baris regional di atas).</p>
     <h2>Persebaran Nilai (Score Total)</h2>
     <div class="card"><div id="hScore"></div><p class="hint">Jumlah leader per rentang nilai (%). Titik hijau = rentang yang lulus.</p></div>
     <h2>Persebaran IPK Total (skala 1-4)</h2>
@@ -69,7 +69,7 @@ td.asp{text-align:left;min-width:120px}td.asp b{display:block;font-weight:600}td
   <p class="note">Leader yang belum punya nilai tidak dihitung dalam rata-rata maupun persentase lulus.</p>
 </main>
 
-<script src="data.js?v=20261019"></script>
+<script src="data.js?v=20261020"></script>
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString("id-ID",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -129,24 +129,17 @@ function charts(a, b, rows, thr){
 }
 
 const ASP = [["fm","First Mile"],["lm","Last Mile"],["ph","Product Handling"]];
-function aspectTable(rows){
-  const regs = [...new Set(rows.map(r => r.region))].sort();
-  let h = `<tr><th>Regional</th>${ASP.map(a => `<th style="text-align:left">${a[1]}</th>`).join("")}<th>Terendah</th><th></th></tr>`;
-  for (const g of ["Nasional", ...regs]){
-    const sub = g === "Nasional" ? rows : rows.filter(r => r.region === g);
-    const v = ASP.map(([k,l]) => ({l, a: avgOf(sub, k)}));
-    const low = v.reduce((m, x) => x.a < m.a ? x : m, v[0]);
-    h += `<tr class="${g==="Nasional"?"nat":""}"${g==="Nasional"?"":` data-r="${esc(g)}"`}><td>${esc(g)}</td>` +
-      v.map(x => `<td class="asp"><b>${fmt(x.a)}</b><div class="bar"><i style="width:${x.a*10}%"></i></div></td>`).join("") +
-      `<td>${low.l}</td>${g==="Nasional"?"<td></td>":'<td class="go">›</td>'}</tr>`;
-  }
-  return h;
+function aspectNational(rows){
+  const v = ASP.map(([k,l]) => ({l, a: avgOf(rows, k)}));
+  const low = v.reduce((m, x) => x.a < m.a ? x : m, v[0]);
+  return v.map(x => `<div class="row"><b>${x.l}</b><div class="bar"><i style="width:${x.a*10}%"></i></div>
+    <div><b>${fmt(x.a)}</b><small>${x === low ? "Aspek terendah" : "&nbsp;"}</small></div></div>`).join("");
 }
 
 function home(rows, thr, kat){
   $("kpis").innerHTML = kpis(stats(rows, thr), "nasional" + (kat ? ` (${kat})` : ""), thr);
   $("tReg").innerHTML = groupTable(rows, "region", "Regional", thr, true);
-  $("tAsp").innerHTML = aspectTable(rows);
+  $("tAsp").innerHTML = aspectNational(rows);
   charts("hScore", "hIpk", rows, thr);
 }
 
@@ -156,11 +149,12 @@ function detail(reg, rows, thr, kat){
   const comps = [["fm","First Mile"],["lm","Last Mile"],["ph","Product Handling"]];
   let h = `<a class="back" href="#">‹ Kembali ke ringkasan</a><h2 style="font-size:20px;margin-top:10px">${esc(reg)}${scope}</h2>
     <div class="kpis">${kpis(stats(mine, thr), "regional", thr)}</div>
-    <h2>Rata-rata per Komponen Skor (skala 0-10)</h2><div class="card">`;
+    <h2>Breakdown per Aspek (skala 0-10)</h2><div class="card">`;
+  const lowK = comps.reduce((m, c) => avgOf(mine, c[0]) < avgOf(mine, m[0]) ? c : m, comps[0])[0];
   for (const [k,l] of comps){
     const a = avgOf(mine,k), nat = avgOf(rows,k);
     h += `<div class="row"><span>${l}</span><div class="bar"><i style="width:${a*10}%"></i></div>
-      <div><b>${fmt(a)}</b><small>Nasional ${fmt(nat)}</small></div></div>`;
+      <div><b>${fmt(a)}</b><small>Nasional ${fmt(nat)}${k === lowK ? " · aspek terendah" : ""}</small></div></div>`;
   }
   h += `</div><h2>Persebaran Nilai (Score Total)</h2><div class="card"><div id="dScore"></div></div>
     <h2>Persebaran IPK Total (skala 1-4)</h2><div class="card"><div id="dIpk"></div></div>`;
